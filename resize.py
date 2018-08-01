@@ -10,11 +10,11 @@ POSSIBLE_RESULT_FORMATS = ['jpeg', 'png', 'gif']
 # functions
 def get_new_size(size, args):
 	if args.height is not None:
-		ratio = size[0] / args.height
-		return args.height, int(size[1] * ratio)
-	if args.width is not None:
-		ratio = size[1] / args.width
+		ratio = args.height / size[1]
 		return int(size[0] * ratio), args.height
+	if args.width is not None:
+		ratio = args.width // size[0]
+		return args.height, int(size[1] / ratio)
 
 
 def get_relative_path_from_root(r, p):
@@ -69,7 +69,7 @@ for root, directory, files in os.walk(args.root_path):
 			root_out = os.path.abspath(os.path.join(args.result_path + '/' + structure))
 			im = Image.open(path_in)
 			size = get_new_size(im.size, args)
-			im.resize(size, Image.ANTIALIAS)
+			im = im.resize(size, Image.ANTIALIAS)
 			pathlib.Path(root_out).mkdir(parents=True, exist_ok=True)
 			im.save(os.path.join(root_out, parse_name(file, args.format)), args.format)
 			print('resized {}'.format(path_in))
