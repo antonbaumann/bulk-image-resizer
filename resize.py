@@ -15,6 +15,7 @@ def get_new_size(size, args):
 	if args.width is not None:
 		ratio = args.width // size[0]
 		return args.height, int(size[1] / ratio)
+	return size
 
 
 def get_relative_path_from_root(r, p):
@@ -46,12 +47,26 @@ parser.add_argument('--format', metavar='F', type=str, default='jpeg',
 
 args = parser.parse_args()
 
+args.root_path = os.path.abspath(args.root_path)
+args.result_path = os.path.abspath(args.result_path)
+
 # check if arguments are valid
 if not os.path.isdir(args.root_path):
 	parser.error('Input directory [{}] does not exist'.format(args.root_path))
 
 if not os.path.isdir(args.result_path):
 	parser.error('Output directory [{}] does not exist'.format(args.result_path))
+
+if args.root_path in args.result_path and args.root_path != args.result_path:
+	parser.error('Output directory must not be in input directory')
+
+if args.root_path == args.result_path:
+	print('[!] WARNING: With this configuration your images could be overwritten!')
+	input_str = '-----'
+	while input_str.upper() not in ['Y', 'N', '']:
+		input_str = input('[?] Do you want to proceed? [y|N]: ')
+		if input_str in ['N', '']:
+			exit(0)
 
 if args.format not in POSSIBLE_RESULT_FORMATS:
 	parser.error('result image format not supported')
