@@ -1,5 +1,5 @@
 # bulk-image-resizer
-Bulk image resizing script written in python.
+Bulk image resizing script in python.
 
 ## Installation
 Run
