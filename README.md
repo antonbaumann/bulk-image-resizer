@@ -3,7 +3,7 @@ Bulk image resizing script written in python.
 
 ## Installation
 Run
-    git clone https://github.com/antonbaumann/bulk-image-resizer
+    `git clone https://github.com/antonbaumann/bulk-image-resizer`
     
 If `pillow` isn't installed, run `pip install pillow`
 
