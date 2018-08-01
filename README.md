@@ -5,7 +5,7 @@ Bulk image resizing script in python.
 Run
     `git clone https://github.com/antonbaumann/bulk-image-resizer`
     
-If you haven't installed `pillow` yet, run `pip install pillow`
+If you haven't already installed `pillow`, run `pip install pillow`
 
 ## Usage
     usage: resize.py [-h] [--height H] [--width W] [--format F]
