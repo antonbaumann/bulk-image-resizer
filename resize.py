@@ -68,10 +68,11 @@ for root, directory, files in os.walk(args.root_path):
 			path_in = os.path.join(root, file)
 			root_out = os.path.abspath(os.path.join(args.result_path + '/' + structure))
 			im = Image.open(path_in)
+			icc_profile = im.info.get('icc_profile')
 			size = get_new_size(im.size, args)
 			im = im.resize(size, Image.ANTIALIAS)
 			pathlib.Path(root_out).mkdir(parents=True, exist_ok=True)
-			im.save(os.path.join(root_out, parse_name(file, args.format)), args.format)
+			im.save(os.path.join(root_out, parse_name(file, args.format)), args.format, icc_profile=icc_profile)
 			print('resized {}'.format(path_in))
 		except IOError:
 			pass
