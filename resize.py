@@ -1,8 +1,12 @@
+# coding=utf-8
+
 import argparse
 import os
 import pathlib
 from PIL import Image
 import time
+from multiprocessing import Pool
+import tqdm
 
 # constants
 POSSIBLE_RESULT_FORMATS = ['jpeg', 'png', 'gif']
@@ -18,6 +22,8 @@ def init_parser():
 	p.add_argument('--width', metavar='W', type=int, help='width of resized image')
 	p.add_argument('--format', metavar='F', type=str, default='jpeg',
 						help='format of resized image {}'.format(POSSIBLE_RESULT_FORMATS))
+	p.add_argument('--processes', metavar='P', type=int, default='4', help='number of processes')
+	p.add_argument('--verbose', action='store_true', default=False, help='verbose output')
 	return p
 
 
@@ -32,7 +38,7 @@ def validate_arguments(p, a):
 		p.error('Output directory must not be in input directory')
 
 	if a.root_path == a.result_path:
-		print('[!] WARNING: With this configuration your images could be overwritten!')
+		print('[!] WARNING: With this configuration your images could get overwritten!')
 		input_str = '-----'
 		while input_str.upper() not in ['Y', 'N', '']:
 			input_str = input('[?] Do you want to proceed? [y|N]: ')
@@ -94,50 +100,47 @@ def progress(t_start, nr_images, nr_done):
 	)
 
 
-def main():
-	parser = init_parser()
-	args = parser.parse_args()
+def resize_image(path):
+	root, file_name = os.path.split(path)
+	relative_path = get_relative_path_from_root(root, args.result_path)
+	abs_root_of_new_file = os.path.join(args.result_path, relative_path)
+	try:
+		im = Image.open(path)
+		icc_profile = im.info.get('icc_profile')
+		size = get_new_size(im.size, args)
+		im = im.resize(size, Image.ANTIALIAS)
+		pathlib.Path(abs_root_of_new_file).mkdir(parents=True, exist_ok=True)
+		im.save(os.path.join(abs_root_of_new_file, parse_name(file_name, args.format)), args.format, icc_profile=icc_profile)
+	except IOError:
+		if args.verbose:
+			print('[i] skipping {}: file not supported'.format(file_name))
+	except ValueError:
+		if args.verbose:
+			print('[i] skipping {}: file not supported'.format(file_name))
 
+
+parser = init_parser()
+args = parser.parse_args()
+
+
+def main():
+	print(args)
 	args.root_path = os.path.abspath(args.root_path)
 	args.result_path = os.path.abspath(args.result_path)
 
 	validate_arguments(parser, args)
 
-	# count files
-	nr_files_to_resize = 0
+	# create a list of all files
+	files_to_resize = []
 	print('[i] counting files ...')
-	for _, _, files in os.walk(args.root_path):
-		nr_files_to_resize += len(files)
-	print('[i] {} files to resize'.format(nr_files_to_resize))
-
-	# iterate through every file in the root directory and all child-directories
-	time_start = time.time()
-	nr_files_resized = 0
-	for root, directory, files in os.walk(args.root_path):
+	for root, _, files in os.walk(args.root_path):
 		for file in files:
-			structure = get_relative_path_from_root(root, args.result_path)
-			path_in = os.path.join(root, file)
-			root_out = os.path.abspath(os.path.join(args.result_path + '/' + structure))
-			try:
-				im = Image.open(path_in)
-				icc_profile = im.info.get('icc_profile')
-				size = get_new_size(im.size, args)
-				im = im.resize(size, Image.ANTIALIAS)
-				pathlib.Path(root_out).mkdir(parents=True, exist_ok=True)
-				im.save(os.path.join(root_out, parse_name(file, args.format)), args.format, icc_profile=icc_profile)
-				print('[✓] [{}] resized  {}'.format(
-					progress(time_start, nr_files_to_resize, nr_files_resized), path_in)
-				)
-			except IOError:
-				print('[i] [{}] skipping {}: file not supported'.format(
-					progress(time_start, nr_files_to_resize, nr_files_resized), path_in)
-				)
-			except ValueError:
-				print('[i] [{}] skipping {}: file not supported'.format(
-					progress(time_start, nr_files_to_resize, nr_files_resized), path_in)
-				)
-			finally:
-				nr_files_resized += 1
+			files_to_resize.append(os.path.join(root, file))
+	print('[i] {} files to resize'.format(len(files_to_resize)))
+
+	p = Pool(processes=args.processes)
+	for _ in tqdm.tqdm(p.imap_unordered(resize_image, files_to_resize), total=len(files_to_resize)):
+		pass
 
 
 if __name__ == '__main__':
