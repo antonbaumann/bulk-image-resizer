@@ -3,9 +3,11 @@ Bulk image resizing script in python.
 
 ## Installation
 Run
-    `git clone https://github.com/antonbaumann/bulk-image-resizer`
-    `cd bulk-image-resizer`
-    `pip install -r requirements.txt`
+    ```
+    git clone https://github.com/antonbaumann/bulk-image-resizer
+    cd bulk-image-resizer
+    pip install -r requirements.txt
+    ```
     
 
 ## Usage
