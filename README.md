@@ -8,5 +8,5 @@ Run
 If you haven't already installed `pillow`, run `pip install pillow`
 
 ## Usage
-    usage: resize.py [-h] [--height H] [--width W] [--format F]
+    usage: resize.py [-h] [--height H] [--width W] [--format F] [--processes P] [--verbose]
            PATH_ROOT PATH_RESULT
