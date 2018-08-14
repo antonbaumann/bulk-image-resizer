@@ -18,12 +18,14 @@ def init_parser():
 
 	p.add_argument('root_path', metavar='PATH_ROOT', type=str, help='path to root directory of images')
 	p.add_argument('result_path', metavar='PATH_RESULT', type=str, help='path to resized images')
-	p.add_argument('--height', metavar='H', type=int, help='height of resized image')
-	p.add_argument('--width', metavar='W', type=int, help='width of resized image')
-	p.add_argument('--format', metavar='F', type=str, default='jpeg',
+	p.add_argument('--height', metavar='HEIGHT', type=int, help='height of resized image')
+	p.add_argument('--width', metavar='WIDTH', type=int, help='width of resized image')
+	p.add_argument('--max-px-long-side', metavar='LONG', type=int, help='maximum pixels for longer side')
+	p.add_argument('--format', metavar='FORMAT', type=str, default='jpeg',
 						help='format of resized image {}'.format(POSSIBLE_RESULT_FORMATS))
-	p.add_argument('--processes', metavar='P', type=int, default='4', help='number of processes')
+	p.add_argument('--processes', metavar='PROCESSES', type=int, default='4', help='number of processes')
 	p.add_argument('--verbose', action='store_true', default=False, help='verbose output')
+	print(p)
 	return p
 
 
@@ -53,13 +55,26 @@ def validate_arguments(p, a):
 
 
 def get_new_size(size, args):
-	if args.height is not None:
-		ratio = args.height / size[1]
-		return int(size[0] * ratio), args.height
-	if args.width is not None:
-		ratio = args.width // size[0]
-		return args.height, int(size[1] / ratio)
-	return size
+	args_height = args.height
+	args_width = args.width
+	new_size = size
+
+	if args_height is not None and args_height < size[1]:
+		scale = args_height / size[1]
+		new_size = int(size[0] * scale), args_height
+	if args_width is not None and args_width < size[0]:
+		scale = args_width / size[0]
+		new_size = args_width, int(size[1] * scale)
+
+	if args.max_px_long_side is not None:
+		ratio = size[0] / size[1]
+		if max(new_size) > args.max_px_long_side:
+			if new_size[0] >= new_size[1]:
+				new_size = args.max_px_long_side, int(args.max_px_long_side / ratio)
+			else:
+				new_size = int(args.max_px_long_side * ratio), args.max_px_long_side
+
+	return new_size
 
 
 def get_relative_path_from_root(r, p):
