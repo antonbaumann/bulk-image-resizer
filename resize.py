@@ -25,7 +25,6 @@ def init_parser():
 						help='format of resized image {}'.format(POSSIBLE_RESULT_FORMATS))
 	p.add_argument('--processes', metavar='PROCESSES', type=int, default='4', help='number of processes')
 	p.add_argument('--verbose', action='store_true', default=False, help='verbose output')
-	print(p)
 	return p
 
 
@@ -36,11 +35,11 @@ def validate_arguments(p, a):
 	if not os.path.isdir(a.result_path):
 		p.error('Output directory [{}] does not exist'.format(a.result_path))
 
-	if a.root_path in a.result_path and a.root_path != a.result_path:
+	if path_is_parent(a.root_path, a.result_path) and a.root_path != a.result_path:
 		p.error('Output directory must not be in input directory')
 
 	if a.root_path == a.result_path:
-		print('[!] WARNING: With this configuration your images could get overwritten!')
+		print('[!] WARNING: With this configuration your original images will be overwritten!')
 		input_str = '-----'
 		while input_str.upper() not in ['Y', 'N', '']:
 			input_str = input('[?] Do you want to proceed? [y|N]: ')
@@ -92,6 +91,10 @@ def get_relative_path_from_root(r, p):
 
 def parse_name(file_name, suffix):
 	return file_name.split('.')[0] + '.' + suffix
+
+
+def path_is_parent(parent_path, child_path):
+    return os.path.commonpath([parent_path]) == os.path.commonpath([parent_path, child_path])
 
 
 def progress(t_start, nr_images, nr_done):
