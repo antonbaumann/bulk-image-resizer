@@ -7,38 +7,38 @@ from PIL import Image
 import time
 from multiprocessing import Pool
 import tqdm
+from functools import partial
 
 # constants
 POSSIBLE_RESULT_FORMATS = ['jpeg', 'png', 'gif']
 
 
-# functions
 def init_parser():
-	p = argparse.ArgumentParser(description='resize images')
+	parser = argparse.ArgumentParser(description='resize images')
 
-	p.add_argument('root_path', metavar='PATH_ROOT', type=str, help='path to root directory of images')
-	p.add_argument('result_path', metavar='PATH_RESULT', type=str, help='path to resized images')
-	p.add_argument('--height', metavar='HEIGHT', type=int, help='height of resized image')
-	p.add_argument('--width', metavar='WIDTH', type=int, help='width of resized image')
-	p.add_argument('--max-px-long-side', metavar='LONG', type=int, help='maximum pixels for longer side')
-	p.add_argument('--format', metavar='FORMAT', type=str, default='jpeg',
+	parser.add_argument('root_path', metavar='PATH_ROOT', type=str, help='path to root directory of images')
+	parser.add_argument('result_path', metavar='PATH_RESULT', type=str, help='path to resized images')
+	parser.add_argument('--height', metavar='HEIGHT', type=int, help='height of resized image')
+	parser.add_argument('--width', metavar='WIDTH', type=int, help='width of resized image')
+	parser.add_argument('--max-px-long-side', metavar='LONG', type=int, help='maximum pixels for longer side')
+	parser.add_argument('--format', metavar='FORMAT', type=str, default='jpeg',
 						help='format of resized image {}'.format(POSSIBLE_RESULT_FORMATS))
-	p.add_argument('--processes', metavar='PROCESSES', type=int, default='4', help='number of processes')
-	p.add_argument('--verbose', action='store_true', default=False, help='verbose output')
-	return p
+	parser.add_argument('--processes', metavar='PROCESSES', type=int, default='2', help='number of processes')
+	parser.add_argument('--verbose', action='store_true', default=False, help='verbose output')
+	return parser
 
 
-def validate_arguments(p, a):
-	if not os.path.isdir(a.root_path):
-		p.error('Input directory [{}] does not exist'.format(a.root_path))
+def validate_arguments(parser, args):
+	if not os.path.isdir(args.root_path):
+		parser.error('Input directory [{}] does not exist'.format(args.root_path))
 
-	if not os.path.isdir(a.result_path):
-		p.error('Output directory [{}] does not exist'.format(a.result_path))
+	if not os.path.isdir(args.result_path):
+		parser.error('Output directory [{}] does not exist'.format(args.result_path))
 
-	if path_is_parent(a.root_path, a.result_path) and a.root_path != a.result_path:
-		p.error('Output directory must not be in input directory')
+	if path_is_parent(args.root_path, args.result_path) and args.root_path != args.result_path:
+		parser.error('Output directory must not be in input directory')
 
-	if a.root_path == a.result_path:
+	if args.root_path == args.result_path:
 		print('[!] WARNING: With this configuration your original images will be overwritten!')
 		input_str = '-----'
 		while input_str.upper() not in ['Y', 'N', '']:
@@ -46,50 +46,43 @@ def validate_arguments(p, a):
 			if input_str in ['N', '']:
 				exit(0)
 
-	if a.format not in POSSIBLE_RESULT_FORMATS:
-		p.error('result image format not supported')
+	if args.format not in POSSIBLE_RESULT_FORMATS:
+		parser.error('result image format not supported')
 
-	if a.height is not None and a.width is not None:
-		p.error('you can either set height or width')
+	if args.height is not None and args.width is not None:
+		parser.error('you can either set height or width')
 
 
-def get_new_size(size, args):
-	args_height = args.height
-	args_width = args.width
+def create_file_list(root_path):
+	file_list = []
+	for root, _, files in os.walk(root_path):
+		for f in files:
+			file_list.append(os.path.join(root, f))
+	return file_list
+
+
+def get_new_size(size, width, height, max_px_long_side):
 	new_size = size
 
-	if args_height is not None and args_height < size[1]:
-		scale = args_height / size[1]
-		new_size = int(size[0] * scale), args_height
-	if args_width is not None and args_width < size[0]:
-		scale = args_width / size[0]
-		new_size = args_width, int(size[1] * scale)
+	if height is not None and height < size[1]:
+		scale = height / size[1]
+		new_size = int(size[0] * scale), height
+	if width is not None and width < size[0]:
+		scale = width / size[0]
+		new_size = width, int(size[1] * scale)
 
-	if args.max_px_long_side is not None:
+	if max_px_long_side is not None:
 		ratio = size[0] / size[1]
-		if max(new_size) > args.max_px_long_side:
+		if max(new_size) > max_px_long_side:
 			if new_size[0] >= new_size[1]:
-				new_size = args.max_px_long_side, int(args.max_px_long_side / ratio)
+				new_size = max_px_long_side, int(max_px_long_side / ratio)
 			else:
-				new_size = int(args.max_px_long_side * ratio), args.max_px_long_side
+				new_size = int(max_px_long_side * ratio), max_px_long_side
 
 	return new_size
 
 
-def get_relative_path_from_root(r, p):
-	root_abs = os.path.abspath(r)
-	path_abs = os.path.abspath(p)
-
-	i = 0
-	for _ in range(min(len(root_abs), len(path_abs))):
-		if root_abs[i] != path_abs[i]:
-			break
-		i += 1
-
-	return root_abs[i:]
-
-
-def parse_name(file_name, suffix):
+def format_name(file_name, suffix):
 	return file_name.split('.')[0] + '.' + suffix
 
 
@@ -118,46 +111,49 @@ def progress(t_start, nr_images, nr_done):
 	)
 
 
-def resize_image(path):
-	root, file_name = os.path.split(path)
-	relative_path = get_relative_path_from_root(root, args.result_path)
-	abs_root_of_new_file = os.path.join(args.result_path, relative_path)
+def resize_image(root_path, result_path, width, height, max_px_long_side, result_format, verbose, image_path):
+	image_root, image_name = os.path.split(image_path)
+	relative_path = os.path.relpath(image_root, root_path)
+	abs_root_of_new_file = os.path.join(result_path, relative_path)
+
 	try:
-		im = Image.open(path)
+		im = Image.open(image_path)
 		icc_profile = im.info.get('icc_profile')
-		size = get_new_size(im.size, args)
+		size = get_new_size(im.size, width, height, max_px_long_side)
 		im = im.resize(size, Image.ANTIALIAS)
 		pathlib.Path(abs_root_of_new_file).mkdir(parents=True, exist_ok=True)
-		im.save(os.path.join(abs_root_of_new_file, parse_name(file_name, args.format)), args.format, icc_profile=icc_profile)
+		im.save(os.path.join(abs_root_of_new_file, format_name(image_name, result_format)), result_format, icc_profile=icc_profile)
 	except IOError:
-		if args.verbose:
-			print('[i] skipping {}: file not supported'.format(file_name))
+		if verbose:
+			print('[i] skipping {}: file not supported'.format(image_name))
 	except ValueError:
-		if args.verbose:
-			print('[i] skipping {}: file not supported'.format(file_name))
-
-
-parser = init_parser()
-args = parser.parse_args()
+		if verbose:
+			print('[i] skipping {}: file not supported'.format(image_name))
 
 
 def main():
-	print(args)
+	parser = init_parser()
+	args = parser.parse_args()
 	args.root_path = os.path.abspath(args.root_path)
 	args.result_path = os.path.abspath(args.result_path)
 
 	validate_arguments(parser, args)
 
 	# create a list of all files
-	files_to_resize = []
 	print('[i] counting files ...')
-	for root, _, files in os.walk(args.root_path):
-		for file in files:
-			files_to_resize.append(os.path.join(root, file))
+	files_to_resize = create_file_list(args.root_path)
 	print('[i] {} files to resize'.format(len(files_to_resize)))
 
 	p = Pool(processes=args.processes)
-	for _ in tqdm.tqdm(p.imap_unordered(resize_image, files_to_resize), total=len(files_to_resize)):
+	f = partial(resize_image, 
+				args.root_path, 
+				args.result_path, 
+				args.width, 
+				args.height, 
+				args.max_px_long_side, 
+				args.format, 
+				args.verbose)
+	for _ in tqdm.tqdm(p.imap(f, files_to_resize), total=len(files_to_resize)):
 		pass
 
 
